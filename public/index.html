@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta name="viewport" content="width=device-width,initial-scale=1.0">
+    <title>Bloom & Banter 🌸 - Where Hearts & Chats Blossom</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <!-- Username Modal -->
+    <div id="username-modal">
+      <div class="modal-content">
+        <h2>🌸 Welcome to Bloom & Banter!</h2>
+        <p>What lovely name shall we call you? Pick something sweet! 💕</p>
+        <input type="text" id="username-input" placeholder="Enter your lovely name" maxlength="20" />
+        <button id="username-submit">Let's Bloom! 🌷</button>
+      </div>
+    </div>
+
+    <!-- Logout Warning Modal -->
+    <div id="logout-modal" class="hidden">
+      <div class="modal-content">
+        <h2>⚠️ Warning!</h2>
+        <p style="margin: 1rem 0; line-height: 1.6;">Logging out will <strong>permanently delete ALL your messages</strong> from this chat!</p>
+        <p style="margin: 1rem 0; color: var(--text-secondary);">Are you sure you want to continue?</p>
+        <div style="display: flex; gap: 0.8rem; margin-top: 1.5rem;">
+          <button id="logout-cancel" style="flex: 1; background: var(--bg-tertiary); color: var(--text-primary); padding: 0.8rem; border: none; border-radius: 15px; cursor: pointer; font-weight: bold;">Cancel</button>
+          <button id="logout-confirm" style="flex: 1; background: var(--accent-red); color: white; padding: 0.8rem; border: none; border-radius: 15px; cursor: pointer; font-weight: bold;">Yes, Logout</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Logout Options Modal -->
+    <div id="logout-options-modal" class="hidden">
+      <div class="modal-content" style="text-align: center;">
+        <h2>👋 Hey <span id="logout-options-username" style="color: var(--accent-pink);"></span>!</h2>
+        <p style="margin: 1.5rem 0; color: var(--text-secondary);">What would you like to do?</p>
+        <div style="display: flex; flex-direction: column; gap: 0.8rem; margin-top: 1.5rem;">
+          <button id="proceed-logout" style="width: 100%; background: linear-gradient(135deg, var(--accent-pink), var(--accent-red)); color: white; padding: 1rem; border: none; border-radius: 15px; cursor: pointer; font-weight: bold; font-size: 1rem;">Logout 🚪</button>
+          <button id="cancel-logout" style="width: 100%; background: var(--bg-tertiary); color: var(--text-primary); padding: 1rem; border: none; border-radius: 15px; cursor: pointer; font-weight: bold; font-size: 1rem;">Stay Here 🌸</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- User Disconnected Notification Modal -->
+    <div id="disconnect-notification-modal" class="hidden">
+      <div class="modal-content" style="text-align: center;">
+        <h2>🚪 User Disconnected</h2>
+        <p id="disconnect-message" style="margin: 1.5rem 0; color: var(--text-secondary); font-size: 1.1rem;"></p>
+        <button id="disconnect-ok-btn" style="width: 100%; background: linear-gradient(135deg, var(--accent-pink), var(--accent-red)); color: white; padding: 1rem; border: none; border-radius: 15px; cursor: pointer; font-weight: bold; font-size: 1rem;">Okay 💐</button>
+      </div>
+    </div>
+
+    <div class="header">
+      <div>
+        <h1>🌸 Bloom & Banter</h1>
+        <div class="header-subtitle">Where hearts bloom and conversations flourish 🌺</div>
+      </div>
+      <div style="display: flex; align-items: center; gap: 1rem;">
+        <button id="logout-btn" style="display: none; background: linear-gradient(135deg, var(--accent-red), #ff2e4f); color: white; border: none; padding: 0.5rem 1rem; border-radius: 20px; font-size: 0.85rem; cursor: pointer; font-weight: bold; transition: all 0.3s;"><span id="logout-username" style="cursor: pointer; text-decoration: underline;"></span> 🚪</button>
+        <div class="user-count">👥 <span id="user-count">1</span> soul(s) online</div>
+      </div>
+    </div>
+
+    <div id="messages-container">
+      <ul id="messages"></ul>
+    </div>
+
+    <form id="form" action="">
+      <input type="file" id="file-input" accept="image/*,application/pdf,.doc,.docx,.txt,.zip,.rar" />
+      <button type="button" id="file-btn" title="Share your memes">📎</button>
+      <input id="input" autocomplete="off" placeholder="Drop some wisdom... or nonsense, we don't judge 🤷" disabled />
+      <button id="send-btn" disabled>🚀 Yeet</button>
+    </form>
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        const socket = io();
+        const form = document.getElementById('form');
+        const input = document.getElementById('input');
+        const messages = document.getElementById('messages');
+        const fileInput = document.getElementById('file-input');
+        const fileBtn = document.getElementById('file-btn');
+        const userCountEl = document.getElementById('user-count');
+        const usernameModal = document.getElementById('username-modal');
+        const usernameInput = document.getElementById('username-input');
+        const usernameSubmit = document.getElementById('username-submit');
+        const sendBtn = document.getElementById('send-btn');
+        const logoutBtn = document.getElementById('logout-btn');
+        const logoutUsernameEl = document.getElementById('logout-username');
+        const logoutModal = document.getElementById('logout-modal');
+        const logoutConfirm = document.getElementById('logout-confirm');
+        const logoutCancel = document.getElementById('logout-cancel');
+        const logoutOptionsModal = document.getElementById('logout-options-modal');
+        const logoutOptionsUsername = document.getElementById('logout-options-username');
+        const proceedLogout = document.getElementById('proceed-logout');
+        const cancelLogout = document.getElementById('cancel-logout');
+        const disconnectModal = document.getElementById('disconnect-notification-modal');
+        const disconnectMessage = document.getElementById('disconnect-message');
+        const disconnectOkBtn = document.getElementById('disconnect-ok-btn');
+
+        let currentUsername = localStorage.getItem('chatUsername') || '';
+        let mySocketId = null;
+
+        const funnyPlaceholders = [
+            "Type something brilliant... we'll wait 🙄",
+            "Your keyboard misses you. Give it some love! ⌨️",
+            "Say something... anything... please? 🥺",
+            "Don't be shy, we're all awkward here 😅",
+            "Hit us with your best shot! 🎯",
+            "Spill the tea ☕ (or just say hi)",
+            "Make it spicy 🌶️ (but keep it classy)",
+            "What's on your mind? Besides food... 🤔",
+        ];
+
+        // Format timestamp
+        function formatTime(timestamp) {
+            const date = new Date(timestamp);
+            return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+        }
+
+        // Create message element
+        function createMessageElement(data, isOwn) {
+            const wrapper = document.createElement('li');
+            wrapper.className = `message-wrapper ${isOwn ? 'own' : 'other'}`;
+            
+            const content = document.createElement('div');
+            content.className = 'message-content';
+            
+            if (!isOwn) {
+                const username = document.createElement('div');
+                username.className = 'message-username';
+                username.textContent = data.username;
+                content.appendChild(username);
+            }
+            
+            if (data.type === 'message') {
+                const text = document.createElement('div');
+                text.className = 'message-text';
+                text.textContent = data.text;
+                content.appendChild(text);
+            } else if (data.type === 'file') {
+                const fileContainer = document.createElement('div');
+                fileContainer.className = 'file-message';
+                
+                const isImage = data.fileData.mimetype.startsWith('image/');
+                
+                if (isImage) {
+                    const img = document.createElement('img');
+                    img.src = data.fileData.path;
+                    img.alt = data.fileData.originalName;
+                    img.loading = 'lazy';
+                    fileContainer.appendChild(img);
+                } else {
+                    const fileIcon = document.createElement('div');
+                    fileIcon.textContent = '📄';
+                    fileIcon.style.fontSize = '2rem';
+                    fileContainer.appendChild(fileIcon);
+                }
+                
+                const link = document.createElement('a');
+                link.href = data.fileData.path;
+                link.textContent = data.fileData.originalName;
+                link.download = data.fileData.originalName;
+                link.target = '_blank';
+                
+                const fileInfo = document.createElement('div');
+                fileInfo.className = 'file-info';
+                const sizeDisplay = data.fileData.size > 1024 * 1024 
+                    ? `${(data.fileData.size / (1024 * 1024)).toFixed(2)} MB`
+                    : `${(data.fileData.size / 1024).toFixed(2)} KB`;
+                fileInfo.textContent = `📦 ${sizeDisplay}`;
+                
+                fileContainer.appendChild(link);
+                fileContainer.appendChild(fileInfo);
+                content.appendChild(fileContainer);
+            }
+            
+            const time = document.createElement('div');
+            time.className = 'message-time';
+            time.textContent = formatTime(data.timestamp);
+            content.appendChild(time);
+            
+            wrapper.appendChild(content);
+            return wrapper;
+        }
+
+        // Show username modal
+        function showUsernameModal() {
+            usernameModal.classList.remove('hidden');
+            usernameInput.value = '';
+            usernameInput.focus();
+        }
+
+        // Hide username modal
+        function hideUsernameModal() {
+            usernameModal.classList.add('hidden');
+        }
+
+        // Update logout button with username
+        function updateLogoutButton() {
+            if (currentUsername) {
+                logoutUsernameEl.textContent = currentUsername;
+                logoutBtn.style.display = 'block';
+            } else {
+                logoutBtn.style.display = 'none';
+            }
+        }
+
+        // Show logout modal
+        function showLogoutModal() {
+            logoutModal.classList.remove('hidden');
+        }
+
+        // Hide logout modal
+        function hideLogoutModal() {
+            logoutModal.classList.add('hidden');
+        }
+
+        // Show logout options modal
+        function showLogoutOptionsModal() {
+            logoutOptionsUsername.textContent = currentUsername;
+            logoutOptionsModal.classList.remove('hidden');
+        }
+
+        // Hide logout options modal
+        function hideLogoutOptionsModal() {
+            logoutOptionsModal.classList.add('hidden');
+        }
+
+        // Submit username
+        function submitUsername() {
+            const username = usernameInput.value.trim();
+            if (username) {
+                currentUsername = username;
+                localStorage.setItem('chatUsername', username);
+                socket.emit('user login', username);
+                hideUsernameModal();
+                updateLogoutButton();
+                input.disabled = false;
+                sendBtn.disabled = false;
+                fileBtn.disabled = false;
+                input.focus();
+            } else {
+                alert('Come on, pick a name! Any name! Even "Bob" works... 🤷');
+            }
+        }
+
+        // Logout function with message deletion
+        function logout() {
+            showLogoutOptionsModal();
+        }
+
+        // Proceed to logout warning
+        function proceedToLogoutWarning() {
+            hideLogoutOptionsModal();
+            showLogoutModal();
+        }
+
+        // Confirm logout
+        function confirmLogout() {
+            // Emit logout event to server to delete messages
+            socket.emit('user logout', { username: currentUsername, socketId: mySocketId });
+            
+            // Clear localStorage
+            localStorage.removeItem('chatUsername');
+            currentUsername = '';
+            
+            // Reset UI
+            updateLogoutButton();
+            input.disabled = true;
+            sendBtn.disabled = true;
+            fileBtn.disabled = true;
+            
+            // Hide logout modal and show username modal
+            hideLogoutModal();
+            showUsernameModal();
+        }
+
+        usernameSubmit.addEventListener('click', submitUsername);
+        usernameInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                submitUsername();
+            }
+        });
+        logoutBtn.addEventListener('click', function(e) {
+            // Prevent default if clicking on the button itself
+            logout();
+        });
+        logoutUsernameEl.addEventListener('click', function(e) {
+            e.stopPropagation();
+            logout();
+        });
+        proceedLogout.addEventListener('click', proceedToLogoutWarning);
+        cancelLogout.addEventListener('click', hideLogoutOptionsModal);
+        logoutConfirm.addEventListener('click', confirmLogout);
+        logoutCancel.addEventListener('click', hideLogoutModal);
+
+        // Add hover effect to logout button
+        logoutBtn.addEventListener('mouseenter', function() {
+            this.style.transform = 'translateY(-2px)';
+            this.style.boxShadow = '0 4px 12px rgba(255, 71, 87, 0.4)';
+        });
+        logoutBtn.addEventListener('mouseleave', function() {
+            this.style.transform = 'translateY(0)';
+            this.style.boxShadow = 'none';
+        });
+
+        // Initialize on load
+        if (currentUsername) {
+            hideUsernameModal();
+            updateLogoutButton();
+            input.disabled = false;
+            sendBtn.disabled = false;
+            fileBtn.disabled = false;
+        }
+
+        // Check if user has username
+        socket.on('connect', function() {
+            mySocketId = socket.id;
+            if (!currentUsername) {
+                showUsernameModal();
+            } else {
+                socket.emit('user login', currentUsername);
+                updateLogoutButton();
+                input.disabled = false;
+                sendBtn.disabled = false;
+                fileBtn.disabled = false;
+            }
+        });
+
+        // Receive chat history
+        socket.on('chat history', function(history) {
+            messages.innerHTML = '';
+            if (history.length === 0) {
+                const emptyState = document.createElement('li');
+                emptyState.className = 'system-message empty-state';
+                emptyState.textContent = '*Crickets chirping* Be the first to break the awkward silence!';
+                messages.appendChild(emptyState);
+            } else {
+                history.forEach(msg => {
+                    const isOwn = msg.username === currentUsername;
+                    const messageEl = createMessageElement(msg, isOwn);
+                    messages.appendChild(messageEl);
+                });
+            }
+            window.scrollTo(0, document.body.scrollHeight);
+        });
+
+        // Rotate placeholder text
+        setInterval(() => {
+            const randomPlaceholder = funnyPlaceholders[Math.floor(Math.random() * funnyPlaceholders.length)];
+            input.placeholder = randomPlaceholder;
+        }, 8000);
+
+        // Handle file button click
+        fileBtn.addEventListener('click', function() {
+            if (!fileBtn.disabled) {
+                fileInput.click();
+            }
+        });
+
+        // Handle file selection
+        fileInput.addEventListener('change', async function() {
+            const file = fileInput.files[0];
+            if (!file) return;
+
+            // Check file size (10MB limit)
+            if (file.size > 10 * 1024 * 1024) {
+                alert('Whoa there! File too thicc 🍔 Max size is 10MB');
+                fileInput.value = '';
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            // Change button text while uploading
+            const originalText = fileBtn.innerHTML;
+            fileBtn.innerHTML = '⏳';
+            fileBtn.disabled = true;
+
+            try {
+                const response = await fetch('/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (response.ok) {
+                    const fileData = await response.json();
+                    socket.emit('file message', {
+                        fileData: fileData,
+                        username: currentUsername
+                    });
+                    fileInput.value = '';
+                } else {
+                    alert('Upload failed! The internet gremlins got it 👹');
+                }
+            } catch (error) {
+                console.error('Upload error:', error);
+                alert('Something went wrong... probably your WiFi 📡');
+            } finally {
+                fileBtn.innerHTML = originalText;
+                fileBtn.disabled = false;
+            }
+        });
+
+        form.addEventListener('submit', function(e) {
+            e.preventDefault();
+            if (input.value.trim()) {
+                socket.emit('chat message', {
+                    text: input.value.trim(),
+                    username: currentUsername
+                });
+                input.value = '';
+            }
+        });
+
+        socket.on('chat message', function(data) {
+            // Remove empty state if exists
+            const emptyState = document.querySelector('.empty-state');
+            if (emptyState) {
+                emptyState.remove();
+            }
+
+            const isOwn = data.username === currentUsername;
+            const messageEl = createMessageElement(data, isOwn);
+            messages.appendChild(messageEl);
+            window.scrollTo(0, document.body.scrollHeight);
+        });
+
+        socket.on('file message', function(data) {
+            // Remove empty state if exists
+            const emptyState = document.querySelector('.empty-state');
+            if (emptyState) {
+                emptyState.remove();
+            }
+
+            const isOwn = data.username === currentUsername;
+            const messageEl = createMessageElement(data, isOwn);
+            messages.appendChild(messageEl);
+            window.scrollTo(0, document.body.scrollHeight);
+        });
+
+        // User count update
+        socket.on('user count', function(count) {
+            userCountEl.textContent = count;
+            if (count === 1) {
+                userCountEl.parentElement.innerHTML = '👥 ' + count + ' lonely soul online';
+            }else if (count == 2) {
+                userCountEl.parentElement.innerHTML = '👥 ' + count + ' soul(s) online';
+            }
+             else if (count > 3) {
+                userCountEl.parentElement.innerHTML = '👥 ' + count + ' chaos agents online 🎪';
+            } 
+        });
+
+        // Handle messages cleared after logout
+        socket.on('messages cleared', function() {
+            // Reload chat history to show updated messages
+            messages.innerHTML = '';
+            const emptyState = document.createElement('li');
+            emptyState.className = 'system-message empty-state';
+            emptyState.textContent = '💐 A fresh start! Be the first to bloom here!';
+            messages.appendChild(emptyState);
+        });
+
+        // Handle user logout notification (only OTHER users see this)
+        socket.on('user logged out', function(data) {
+            disconnectMessage.textContent = `${data.username} logged out and all chat messages were deleted.`;
+            disconnectModal.classList.remove('hidden');
+        });
+
+        // Close disconnect notification modal
+        disconnectOkBtn.addEventListener('click', function() {
+            disconnectModal.classList.add('hidden');
+        });
+    </script>
+  </body>
+</html>
