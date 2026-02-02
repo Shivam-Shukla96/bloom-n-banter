@@ -4,17 +4,26 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { Server } from 'socket.io';
 import multer from 'multer';
+import dotenv from 'dotenv';
 
+// Load environment variables
+dotenv.config();
 
 const app = express();
 const server = createServer(app);
 
 const io = new Server(server);
 
+// Configuration from environment variables
+const PORT = process.env.PORT || 8000;
+const MAX_FILE_SIZE = parseInt(process.env.MAX_FILE_SIZE) || 10485760; // 10MB default
+const UPLOAD_DIR = process.env.UPLOAD_DIR || 'public/uploads/';
+const MAX_MESSAGE_HISTORY = parseInt(process.env.MAX_MESSAGE_HISTORY) || 100;
+
 // Configure multer for file uploads
 const storage = multer.diskStorage({
     destination: function (req, file, cb) {
-        cb(null, 'public/uploads/');
+        cb(null, UPLOAD_DIR);
     },
     filename: function (req, file, cb) {
         const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
@@ -24,7 +33,7 @@ const storage = multer.diskStorage({
 
 const upload = multer({
     storage: storage,
-    limits: { fileSize: 10 * 1024 * 1024 } // 10MB limit
+    limits: { fileSize: MAX_FILE_SIZE }
 });
 
 // Store messages and files in memory
@@ -36,7 +45,6 @@ app.use(express.static('public'));
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 console.log('dirname -> ', join(__dirname, 'index.html'));
-const PORT = process.env.PORT || 8000;
 
 app.get('/', (req, res) => {
     res.sendFile(join(__dirname, 'index.html'));
@@ -88,8 +96,8 @@ io.on('connection', (socket) => {
         // Store message in history
         messageHistory.push(messageData);
 
-        // Limit history to last 100 messages
-        if (messageHistory.length > 100) {
+        // Limit history to configured max messages
+        if (messageHistory.length > MAX_MESSAGE_HISTORY) {
             messageHistory.shift();
         }
 
@@ -109,8 +117,8 @@ io.on('connection', (socket) => {
         // Store file message in history
         messageHistory.push(fileMessageData);
 
-        // Limit history to last 100 messages
-        if (messageHistory.length > 100) {
+        // Limit history to configured max messages
+        if (messageHistory.length > MAX_MESSAGE_HISTORY) {
             messageHistory.shift();
         }
 
