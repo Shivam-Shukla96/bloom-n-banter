@@ -5,6 +5,7 @@ import { dirname, join } from 'node:path';
 import { Server } from 'socket.io';
 import multer from 'multer';
 import dotenv from 'dotenv';
+import fs from 'fs';
 
 // Load environment variables
 dotenv.config();
@@ -19,6 +20,12 @@ const PORT = process.env.PORT || 8000;
 const MAX_FILE_SIZE = parseInt(process.env.MAX_FILE_SIZE) || 10485760; // 10MB default
 const UPLOAD_DIR = process.env.UPLOAD_DIR || 'public/uploads/';
 const MAX_MESSAGE_HISTORY = parseInt(process.env.MAX_MESSAGE_HISTORY) || 100;
+
+// Ensure upload directory exists
+if (!fs.existsSync(UPLOAD_DIR)) {
+    fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+    console.log(`Created upload directory: ${UPLOAD_DIR}`);
+}
 
 // Configure multer for file uploads
 const storage = multer.diskStorage({
@@ -50,21 +57,35 @@ app.get('/', (req, res) => {
     res.sendFile(join(__dirname, 'index.html'));
 })
 
-// File upload endpoint
-app.post('/upload', upload.single('file'), (req, res) => {
-    if (!req.file) {
-        return res.status(400).json({ error: 'No file uploaded' });
-    }
+// File upload endpoint with error handling
+app.post('/upload', (req, res) => {
+    upload.single('file')(req, res, (err) => {
+        if (err) {
+            console.error('Upload error:', err);
+            if (err instanceof multer.MulterError) {
+                if (err.code === 'LIMIT_FILE_SIZE') {
+                    return res.status(400).json({ error: 'File too large. Max size: 10MB' });
+                }
+                return res.status(400).json({ error: `Upload error: ${err.message}` });
+            }
+            return res.status(500).json({ error: `Server error: ${err.message}` });
+        }
 
-    const fileData = {
-        filename: req.file.filename,
-        originalName: req.file.originalname,
-        path: `/uploads/${req.file.filename}`,
-        mimetype: req.file.mimetype,
-        size: req.file.size
-    };
+        if (!req.file) {
+            return res.status(400).json({ error: 'No file uploaded' });
+        }
 
-    res.json(fileData);
+        const fileData = {
+            filename: req.file.filename,
+            originalName: req.file.originalname,
+            path: `/uploads/${req.file.filename}`,
+            mimetype: req.file.mimetype,
+            size: req.file.size
+        };
+
+        console.log('File uploaded successfully:', fileData);
+        res.json(fileData);
+    });
 });
 
 io.on('connection', (socket) => {
